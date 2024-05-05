@@ -16,6 +16,7 @@ lazy val vivado = (project in file("."))
   .dependsOn(rocketchip)
   .dependsOn(sifive_cache)
   .dependsOn(gemmini)
+  .dependsOn(kairos)
   .settings(commonSettings)
   .settings(assemblyJarName in assembly := "system.jar")
   .settings(assemblyMergeStrategy in assembly := {
