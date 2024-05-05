@@ -75,7 +75,7 @@ lazy val cde = (project in file("rocket-chip/cde"))
   .settings(commonSettings)
   .settings(scalaSource in Compile := baseDirectory.value / "cde/src/chipsalliance/rocketchip")
 
-lazy val kairos = Project(id = "Kairos", base = file("generators/Kairos") / "src")
+lazy val kairos = Project(id = "kairos", base = file("generators/Kairos") / "src")
   .dependsOn(cde)
   .dependsOn(rocketchip)
   .dependsOn(testchipip)
