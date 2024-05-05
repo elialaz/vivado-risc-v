@@ -392,3 +392,11 @@ class Rocket64z2m extends Config(
   new boom.common.WithNMegaBooms(2) ++
   new WithExtMemSize(0x3f80000000L) ++
   new RocketWideBusConfig)
+
+/*----------------- Kairos Core ---------------*/
+
+class Rocket64k1 extends Config(
+  new WithInclusiveCache  ++
+  new WithNBreakpoints(8) ++
+  new kairos.common.WithNMediumBooms(1) ++
+  new RocketWideBusConfig)
