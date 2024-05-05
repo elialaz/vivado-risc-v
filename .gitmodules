@@ -25,3 +25,6 @@
 [submodule "opensbi"]
 	path = opensbi
 	url = https://github.com/riscv/opensbi.git
+[submodule "generators/Kairos"]
+	path = generators/Kairos
+	url = https://github.com/elialaz/Kairos.git
