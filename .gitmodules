@@ -28,3 +28,6 @@
 [submodule "generators/Kairos"]
 	path = generators/Kairos
 	url = https://github.com/elialaz/Kairos.git
+[submodule "generators/cva6"]
+	path = generators/cva6
+	url = https://github.com/ucb-bar/cva6-wrapper.git
