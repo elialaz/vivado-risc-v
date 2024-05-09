@@ -221,7 +221,8 @@ CHISEL_SRC_DIRS = \
   generators/riscv-boom/src/main \
   generators/sifive-cache/design/craft \
   generators/testchipip/src/main \
-  generators/Kairos/src/main
+  generators/Kairos/src/main \
+  generators/cva6/src/main
 
 CHISEL_SRC := $(foreach path, $(CHISEL_SRC_DIRS), $(shell test -d $(path) && find $(path) -iname "*.scala" -not -name ".*"))
 FIRRTL = java -Xmx12G -Xss8M $(JAVA_OPTIONS) -cp `realpath target/scala-*/system.jar` firrtl.stage.FirrtlMain
@@ -233,6 +234,7 @@ workspace/patch-hdl-done:
 	if [ -s patches/sifive-cache.patch ] ; then cd generators/sifive-cache && ( git apply -R --check ../../patches/sifive-cache.patch 2>/dev/null || git apply ../../patches/sifive-cache.patch ) ; fi
 	if [ -s patches/gemmini.patch ] ; then cd generators/gemmini && ( git apply -R --check ../../patches/gemmini.patch 2>/dev/null || git apply ../../patches/gemmini.patch ) ; fi
 	if [ -s patches/kairos.patch ] ; then cd generators/Kairos && ( git apply -R --check ../../patches/kairos.patch 2>/dev/null || git apply ../../patches/kairos.patch ) ; fi
+	if [ -s patches/cva6.patch ] ; then cd generators/cva6 && ( git apply -R --check ../../patches/cva6.patch 2>/dev/null || git apply ../../patches/cva6.patch ) ; fi
 	mkdir -p workspace && touch workspace/patch-hdl-done
 
 # Generate default device tree - not including peripheral devices or board specific data

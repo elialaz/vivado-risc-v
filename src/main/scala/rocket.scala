@@ -400,3 +400,12 @@ class Rocket64k1 extends Config(
   new WithNBreakpoints(8) ++
   new kairos.common.WithNMediumBooms(1) ++
   new RocketWideBusConfig)
+
+
+/*----------------- CVA6 Core ---------------*/
+
+class Rocket64c1 extends Config(
+  new WithInclusiveCache  ++
+  new WithNBreakpoints(8) ++
+  new cva6.WithNCVA6Cores(1) ++
+  new RocketWideBusConfig)
