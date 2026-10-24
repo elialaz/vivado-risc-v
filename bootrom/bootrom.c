@@ -362,6 +362,30 @@ DSTATUS disk_status(BYTE drv) {
     return drv_status;
 }
 
+#ifdef BOOTROM_ZICBOM
+/*
+ * The board SD controller writes DDR as a DMA master that is not coherent
+ * with the CPU data cache on native SoCs that cache DDR (e.g. CVA6 HPDcache).
+ * Maintain the DMA buffer with Zicbom. BOOTROM_ZICBOM is the cache-block size
+ * in bytes. Raw encodings are used because the bootstrap GCC predates the
+ * Zicbom mnemonics: cbo.flush (a0) = 0x0025200f, cbo.inval (a0) = 0x0005200f.
+ */
+static void cache_block_op(void *buf, unsigned bytes, unsigned flush) {
+    const uintptr_t block = BOOTROM_ZICBOM;
+    uintptr_t p = (uintptr_t)buf & ~(block - 1);
+    uintptr_t end = (uintptr_t)buf + bytes;
+    asm volatile ("fence rw, rw" ::: "memory");
+    for (; p < end; p += block) {
+        if (flush) {
+            asm volatile ("mv a0, %0; .word 0x0025200f" :: "r"(p) : "a0", "memory");
+        } else {
+            asm volatile ("mv a0, %0; .word 0x0005200f" :: "r"(p) : "a0", "memory");
+        }
+    }
+    asm volatile ("fence rw, rw" ::: "memory");
+}
+#endif
+
 DRESULT disk_read(BYTE drv, BYTE * buf, LBA_t sector, UINT count) {
 
     if (!count) return RES_PARERR;
@@ -372,7 +396,13 @@ DRESULT disk_read(BYTE drv, BYTE * buf, LBA_t sector, UINT count) {
     while (count > 0) {
         UINT bcnt = count > MAX_BLOCK_CNT ? MAX_BLOCK_CNT : count;
         unsigned bytes = bcnt * 512;
+#ifdef BOOTROM_ZICBOM
+        cache_block_op(buf, bytes, 1);
+#endif
         if (send_data_cmd(bcnt == 1 ? CMD17 : CMD18, sector, buf, bcnt) < 0) return RES_ERROR;
+#ifdef BOOTROM_ZICBOM
+        cache_block_op(buf, bytes, 0);
+#endif
         if (bcnt > 1 && send_cmd(CMD12, 0) < 0) return RES_ERROR;
         sector += (card_type & CT_BLOCK) ? bcnt : bytes;
         count -= bcnt;

@@ -1,4 +1,10 @@
 set boards_path "../../board/${vivado_board_name}/board_files"
+if {![info exists soc_backend]} {
+  set soc_backend rocket
+}
+if {![info exists vivado_project_dir]} {
+  set vivado_project_dir vivado-${vivado_board_name}-riscv
+}
 if {[file isdirectory ${boards_path}]} {
     set_param board.repoPaths ${boards_path}
     puts "Set boards repo path: [get_param board.repoPaths]"
@@ -7,7 +13,7 @@ if {[file isdirectory ${boards_path}]} {
 # If there is no project opened, create a project
 set list_projs [get_projects -quiet]
 if { $list_projs eq "" } {
-   create_project ${vivado_board_name}-riscv vivado-${vivado_board_name}-riscv -part ${xilinx_part}
+   create_project ${vivado_board_name}-riscv ${vivado_project_dir} -part ${xilinx_part}
    # Allow projects with no BOARD_PART set. xilinx_part and /board constraints can suffice.
    if {[info exists vivado_board_part]} {
       set_property BOARD_PART ${vivado_board_part} [current_project]
@@ -30,9 +36,20 @@ set source_fileset [get_filesets sources_1]
 # Set 'constrs_1' fileset object
 set constraint_fileset [get_filesets constrs_1]
 
-set files [list \
- [file normalize "rocket.vhdl"] \
- [file normalize "system-${vivado_board_name}.v"] \
+if {$soc_backend eq "rocket"} {
+  set files [list \
+   [file normalize "rocket.vhdl"] \
+   [file normalize "system-${vivado_board_name}.v"]]
+} else {
+  # Native SoC (CVA6, NOEL-V): a Verilog shim with the board-facing
+  # interfaces, a black-box stub of the SoC wrapper, and its pre-synthesized
+  # out-of-context netlist, which implementation reads into the black box
+  # (see the impl_1 hook below). No SoC HDL enters this project.
+  set files [list \
+   [file normalize ${native_soc_shim}] \
+   [file normalize ${native_soc_dir}/soc_stub.v]]
+}
+lappend files \
  [file normalize "../../uart/uart.v"] \
  [file normalize "../../sdc/sd_defines.h"] \
  [file normalize "../../sdc/axi_sdc_controller.v"] \
@@ -42,8 +59,7 @@ set files [list \
  [file normalize "../../sdc/sd_data_serial_host.v"] \
  [file normalize "../../vhdl-wrapper/src/net/largest/riscv/vhdl/bscan2jtag.vhdl"] \
  [file normalize "../../board/mem-reset-control.v"] \
- [file normalize "../../board/fan-control.v"] \
-]
+ [file normalize "../../board/fan-control.v"]
 add_files -norecurse -fileset $source_fileset $files
 
 if {[file exists "../../board/${vivado_board_name}/ethernet-${vivado_board_name}.v"]} {
@@ -74,6 +90,19 @@ if { ! [string match "Rocket*gem[2-9]" $rocket_module_name] } {
 }
 
 source ../../board/${vivado_board_name}/ethernet-${vivado_board_name}.tcl
+
+if {$soc_backend ne "rocket"} {
+  # A BD module reference cannot contain a checkpoint, and Vivado renames the
+  # stub module inside it, so the netlist cannot be matched by name at link.
+  # Fill the SoC black box explicitly right after link_design instead.
+  set native_fill_tcl [file normalize native-soc-fill.tcl]
+  set fd [open $native_fill_tcl w]
+  puts $fd "set soc_bb \[get_cells -hier -filter {IS_BLACKBOX && NAME =~ \"*/RocketChip/*\"}\]"
+  puts $fd "if {\[llength \$soc_bb\] != 1} { error \"Expected one native SoC black box, found: \$soc_bb\" }"
+  puts $fd "read_checkpoint -cell \$soc_bb [file normalize ${native_soc_dir}/soc.dcp]"
+  close $fd
+  set_property STEPS.INIT_DESIGN.TCL.POST $native_fill_tcl [get_runs impl_1]
+}
 
 # Note: timing-constraints.tcl must be last
 add_files -norecurse -fileset $constraint_fileset [file normalize ../../board/timing-constraints.tcl]

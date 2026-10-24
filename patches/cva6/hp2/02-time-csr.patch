@@ -1,0 +1,78 @@
+--- a/corev_apu/clint/clint.sv	2026-10-24 10:09:56.011268362 +0200
++++ b/corev_apu/clint/clint.sv	2026-10-24 10:10:23.301152328 +0200
+@@ -32,7 +32,8 @@
+     output axi_resp_t           axi_resp_o,
+     input  logic                rtc_i,       // Real-time clock in (usually 32.768 kHz)
+     output logic [NR_CORES-1:0] timer_irq_o, // Timer interrupts
+-    output logic [NR_CORES-1:0] ipi_o        // software interrupt (a.k.a inter-process-interrupt)
++    output logic [NR_CORES-1:0] ipi_o,       // software interrupt (a.k.a inter-process-interrupt)
++    output logic [63:0]         mtime_o      // mtime, for the cores' time CSR
+ );
+     // register offset
+     localparam logic [15:0] MSIP_BASE     = 16'h0;
+@@ -57,6 +58,7 @@
+     logic [63:0]               mtime_n, mtime_q;
+     logic [NR_CORES-1:0][63:0] mtimecmp_n, mtimecmp_q;
+     logic [NR_CORES-1:0]       msip_n, msip_q;
++    assign mtime_o = mtime_q;
+     // increase the timer
+     logic increase_timer;
+ 
+--- a/corev_apu/src/ariane.sv	2026-10-24 10:09:56.015268345 +0200
++++ b/corev_apu/src/ariane.sv	2026-10-24 10:10:23.301152328 +0200
+@@ -59,6 +59,7 @@
+   input  logic                         ipi_i,        // inter-processor interrupts (async)
+   // Timer facilities
+   input  logic                         time_irq_i,   // timer interrupt in (async)
++  input  logic [63:0]                  time_i,       // mtime, read by the time CSR
+   input  logic                         debug_req_i,  // debug request (async)
+   // RISC-V formal interface port (`rvfi`):
+   // Can be left open when formal tracing is not needed.
+@@ -102,6 +103,7 @@
+     .irq_i                ( irq_i                     ),
+     .ipi_i                ( ipi_i                     ),
+     .time_irq_i           ( time_irq_i                ),
++    .time_i               ( time_i                    ),
+     .debug_req_i          ( debug_req_i               ),
+     .rvfi_probes_o        ( rvfi_probes_o             ),
+     .cvxif_req_o          ( cvxif_req                 ),
+--- a/core/cva6.sv	2026-10-24 10:09:56.018268332 +0200
++++ b/core/cva6.sv	2026-10-24 10:10:23.302152324 +0200
+@@ -334,6 +334,8 @@
+     input logic ipi_i,
+     // Timer (async) interrupt - SUBSYSTEM
+     input logic time_irq_i,
++    // Platform mtime, read by the time CSR - SUBSYSTEM
++    input logic [63:0] time_i,
+     // Debug (async) request - SUBSYSTEM
+     input logic debug_req_i,
+     // Probes to build RVFI, can be left open when not used - RVFI
+@@ -1223,6 +1225,7 @@
+       .clk_i,
+       .rst_ni,
+       .time_irq_i,
++      .time_i,
+       .flush_o                            (flush_csr_ctrl),
+       .halt_csr_o                         (halt_csr_ctrl),
+       .commit_instr_i                     (commit_instr_id_commit[0]),
+--- a/core/csr_regfile.sv	2026-10-24 10:09:56.022268316 +0200
++++ b/core/csr_regfile.sv	2026-10-24 10:10:23.302152324 +0200
+@@ -32,6 +32,8 @@
+     input logic rst_ni,
+     // Timer threw an interrupt - SUBSYSTEM
+     input logic time_irq_i,
++    // Platform mtime for the time CSR (Zicntr) - SUBSYSTEM
++    input logic [63:0] time_i,
+     // send a flush request out when a CSR with a side effect changes - CONTROLLER
+     output logic flush_o,
+     // halt requested - CONTROLLER
+@@ -703,6 +705,9 @@
+         riscv::CSR_MINSTRETH:
+         if (CVA6Cfg.IS_XLEN32) csr_rdata = instret_q[63:32];
+         else read_access_exception = 1'b1;
++        riscv::CSR_TIME:
++        if (CVA6Cfg.RVZicntr) csr_rdata = time_i[CVA6Cfg.XLEN-1:0];
++        else read_access_exception = 1'b1;
+         riscv::CSR_CYCLE:
+         if (CVA6Cfg.RVZicntr) csr_rdata = cycle_q[CVA6Cfg.XLEN-1:0];
+         else read_access_exception = 1'b1;

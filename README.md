@@ -49,6 +49,22 @@ Nexys Video, Nexys A7 100T and Arty A7 100T are supported by free version of Viv
 
 If using a Digilent board, install [Vivado Board Files for Digilent FPGA Boards](https://github.com/Digilent/vivado-boards).
 
+### Extra requirements for the CVA6 and NOEL-V configurations
+The native CVA6 and NOEL-V SoCs are tested on Genesys 2 only (VCU118 support
+is in progress). Besides the packages from `make apt-install`, they need:
+* All submodules, recursively: `git submodule update --init --recursive`
+  (CVA6 brings its own pinned dependencies; NOEL-V uses `generators/grlib`).
+* `python3` (CVA6 and NOEL-V boot ROM generators) and `patch`.
+* The repository RISC-V toolchain (`workspace/gcc`, built by the normal
+  flow) for the boot ROMs.
+* NOEL-V only, optional: [GRMON](https://www.gaisler.com/grmon) from
+  Frontgrade Gaisler for JTAG debug through the on-chip AHBJTAG (the free
+  evaluation version works; stop `hw_server` first), and
+  [GHDL](https://github.com/ghdl/ghdl) only for the optional simulation
+  scripts in `scripts/native/`.
+* NOEL-V designs contain GRLIB GPL HDL; see the license note below before
+  distributing NOEL-V bitstreams.
+
 # Usage
 
 ## Checkout the repository, install required packages and update submodules
@@ -89,6 +105,41 @@ Some of available CONFIG values (See [rocket.scala](https://github.com/eugene-ta
   * `rocket64x1` - 2-wide superscalar Medium BOOM, 1 core
   * `rocket64y1` - 3-wide superscalar Large BOOM, 1 core
   * `rocket64z1` - 4-wide superscalar Mega BOOM, 1 core
+* 64-bit BOOM v4 development cores (Medium: bare metal only, Linux hangs, see [docs/hardware-status.md](docs/hardware-status.md)):
+  * `rocket64w1v4` - Small BOOM v4, 1 core
+  * `rocket64x1v4` - Medium BOOM v4, 1 core
+  * `rocket64y1v4` - Large BOOM v4, 1 core
+  * `rocket64z1v4` - Mega BOOM v4, 1 core
+
+  BOOM v4 is less mature than BOOM v3. Start with `rocket64w1v4` on
+  resource-constrained boards such as Genesys 2.
+* Native 64-bit CVA6 SoCs (official OpenHW Group submodule), attached
+  directly to the board AXI fabric, 1 core, 50 MHz on Genesys 2:
+  * `rocket64cva6` - cv64a6_imafdc_sv39 (write-through), DDR uncached (slow;
+    Linux reaches the initrd but systemd fails)
+  * `rocket64cva6hp` - HPDcache write-back, cached DDR, Zicbom DMA
+    maintenance (Linux tested)
+  * `rocket64cva6hp2` - HP plus dual issue, larger caches and predictors,
+    hardware `time` CSR (Linux tested)
+* Native 64-bit NOEL-V SoCs (pinned GRLIB `noelvsys`), 50 MHz on Genesys 2:
+  * `rocket64noelv` - NOEL-V GP, dual issue, FPU, 1 core (Linux tested)
+  * `rocket64noelvhp` - NOEL-V HP, 1 core (Linux tested)
+  * `rocket64noelvhp2` - 2 HP harts, 512 KiB L2C-Lite; too large for Genesys 2
+  * `rocket64noelvhp2s` - hp2 trimmed to fit Genesys 2, 2 harts (SMP Linux
+    tested)
+
+All SoCs use the normal build interface; only `CONFIG` changes the backend.
+CVA6 and NOEL-V do not use the Scala/TileLink generator path:
+```
+git submodule update --init --recursive
+make CONFIG=rocket64cva6 BOARD=genesys2 vivado-project
+make CONFIG=rocket64noelv BOARD=genesys2 vivado-project
+```
+Status, CoreMark/MHz results and debug notes for these SoCs are in
+[docs/hardware-status.md](docs/hardware-status.md); the architecture is in
+[docs/native-axi-refactor.md](docs/native-axi-refactor.md).
+See [docs/generator-dependencies.md](docs/generator-dependencies.md) for pinned
+upstreams, BOOM v4 configurations, and GRLIB integration details.
 * 32-bit small RISC-V cores, Linux not supported:
   * `rocket32s1` - 1 core
   * `rocket32s2` - 2 cores
@@ -101,6 +152,39 @@ FPGA utilization, LUTs:
 * 64-bit big RISC-V: 10,800 + 27,500 per core
 * 2-wide superscalar Medium BOOM, 1 core, L2 cache: 148,500
 * 3-wide superscalar Large BOOM, 1 core, L2 cache: 252,700
+
+Genesys 2 (xc7k325t, 203,800 LUTs), whole design including the board shell:
+
+| CONFIG | LUTs | Block RAM tiles |
+| --- | --- | --- |
+| `rocket64cva6` | 76,100 | 46.5 |
+| `rocket64cva6hp` | 77,000 | 44.5 |
+| `rocket64cva6hp2` | 97,700 | 74.5 |
+| `rocket64noelv` | 87,500 | 30.5 |
+| `rocket64noelvhp` | 98,700 | 58 |
+| `rocket64noelvhp2s` (2 harts) | 170,800 | 220 |
+| `rocket64w1v4` | 103,700 | 40.5 |
+| `rocket64x1` | 170,500 | - |
+| `rocket64x1v4` | 168,600 | 166.5 |
+
+CoreMark/MHz measured on Genesys 2 (best of 5 validated runs; bare metal with
+GCC 15.1, Linux user space with GCC 11.4, so compare within a column). "Rel."
+is normalized to BOOM v3 Medium (`rocket64x1`) = 1.00 on the same flags.
+"base" is `-O2 -march=rv64imafdc` for every core; "tuned" is the best of the
+per-core `-flto` builds using the core's full ISA and `-mtune` models.
+
+| CONFIG (MHz) | Bare metal base | Rel. | Bare metal tuned | Rel. | Linux base | Rel. | Linux tuned | Rel. |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `rocket64cva6hp` (50) | 2.369 | 0.50 | 2.772 | 0.60 | 1.955 | 0.50 | 2.046 | 0.49 |
+| `rocket64cva6hp2` (50) | 3.233 | 0.68 | 3.905 | 0.84 | 2.839 | 0.73 | 3.333 | 0.80 |
+| `rocket64noelvhp` (50) | 3.591 | 0.75 | 4.653 | 1.00 | 3.148 | 0.81 | 3.537 | 0.85 |
+| `rocket64noelvhp2s` (50, 1 hart) | 3.569 | 0.75 | 4.650 | 1.00 | 3.185 | 0.82 | 3.731 | 0.90 |
+| `rocket64x1` (50) | 4.773 | 1.00 | 4.654 | 1.00 | 3.874 | 1.00 | 4.158 | 1.00 |
+| `rocket64x1v4` (40) | 4.328 | 0.91 | 4.597 | 0.99 | - | - | - | - |
+
+`rocket64noelvhp2s` running two copies under Linux reaches 7.05 CoreMark/MHz
+in total (1.89x one copy). BOOM v4 Medium does not boot Linux (upstream bug);
+details and per-flag results are in [docs/hardware-status.md](docs/hardware-status.md).
 
 ## Prepare the SD card
 Use USB SD card reader to connect SD card to the workstation, and run:
@@ -244,6 +328,12 @@ Nexys Video and Nexys A7 boards can be configured to [load FPGA bitstream from S
 
 The device tree contains Ethernet MAC address, which is not unique.
 It might be necessary to rebuild bitstream with different MAC, see Makefile for details.
+
+CVA6 ([OpenHW Group](https://github.com/openhwgroup/cva6), Solderpad/Apache)
+and NOEL-V ([Frontgrade Gaisler GRLIB GPL](https://www.gaisler.com/grlib-ip-library))
+are integrated as native SoCs on the same board shell, without Rocket Chip.
+NOEL-V bitstreams include GRLIB GPL-2.0-only HDL and must follow the GPL when
+distributed; see [LICENSE.md](LICENSE.md).
 
 If not using provided SD card image: the bootrom loads and executes boot.elf file from SD card DOS partition.
 boot.elf is regular executable ELF, it can contain any software suitable for RISC-V RV64 M mode.

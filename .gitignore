@@ -17,3 +17,8 @@
 /.ivy2/
 /.sbt/
 /.Xilinx/
+/.Xil/
+/scripts/native/coremark/build/
+/scripts/native/hwtest/*.bin
+/scripts/native/hwtest/*.elf
+/HANDOFF.md

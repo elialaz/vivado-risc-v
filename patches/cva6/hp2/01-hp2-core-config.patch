@@ -1,0 +1,49 @@
+--- a/core/include/cv64a6_imafdc_sv39_hpdcache_wb_config_pkg.sv	2026-10-24 10:09:56.025268303 +0200
++++ b/core/include/cv64a6_imafdc_sv39_hpdcache_wb_config_pkg.sv	2026-10-24 10:10:23.302152324 +0200
+@@ -44,11 +44,11 @@
+   localparam CVA6ConfigDataUserEn = 0;
+   localparam CVA6ConfigDataUserWidth = CVA6ConfigXlen;
+ 
+-  localparam CVA6ConfigIcacheByteSize = 16384;
+-  localparam CVA6ConfigIcacheSetAssoc = 4;
++  localparam CVA6ConfigIcacheByteSize = 32768;
++  localparam CVA6ConfigIcacheSetAssoc = 8;
+   localparam CVA6ConfigIcacheLineWidth = 128;
+-  localparam CVA6ConfigDcacheByteSize = 32768;
+-  localparam CVA6ConfigDcacheSetAssoc = 8;
++  localparam CVA6ConfigDcacheByteSize = 65536;
++  localparam CVA6ConfigDcacheSetAssoc = 16;
+   localparam CVA6ConfigDcacheLineWidth = 128;
+   // do not flush Dcache for EVERY fence - dramatic performance impact
+   // use RVZiCbom to synchronize caches with DMA devices instead
+@@ -62,15 +62,15 @@
+ 
+   localparam CVA6ConfigWtDcacheWbufDepth = 7;
+ 
+-  localparam CVA6ConfigNrScoreboardEntries = 8;
++  localparam CVA6ConfigNrScoreboardEntries = 16;
+ 
+   localparam CVA6ConfigNrLoadPipeRegs = 1;
+   localparam CVA6ConfigNrStorePipeRegs = 0;
+   localparam CVA6ConfigNrLoadBufEntries = 8;
+ 
+-  localparam CVA6ConfigRASDepth = 2;
+-  localparam CVA6ConfigBTBEntries = 32;
+-  localparam CVA6ConfigBHTEntries = 128;
++  localparam CVA6ConfigRASDepth = 4;
++  localparam CVA6ConfigBTBEntries = 64;
++  localparam CVA6ConfigBHTEntries = 1024;
+ 
+   localparam CVA6ConfigTvalEn = 1;
+ 
+@@ -90,8 +90,8 @@
+       FpgaEn: bit'(0),  // for Xilinx and Altera
+       FpgaAlteraEn: bit'(0),  // for Altera (only)
+       TechnoCut: bit'(0),
+-      SuperscalarEn: bit'(0),
+-      ALUBypass: bit'(0),
++      SuperscalarEn: bit'(1),
++      ALUBypass: bit'(1),
+       NrCommitPorts: unsigned'(2),
+       AxiAddrWidth: unsigned'(CVA6ConfigAxiAddrWidth),
+       AxiDataWidth: unsigned'(CVA6ConfigAxiDataWidth),

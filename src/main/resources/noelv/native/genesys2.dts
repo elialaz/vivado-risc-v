@@ -1,0 +1,152 @@
+/dts-v1/;
+
+/*
+ * Native NOEL-V (GRLIB noelvsys) on the vivado-risc-v Genesys 2 shell.
+ * mk/native.mk substitutes clock-frequency, timebase-frequency (NOEL-V mtime
+ * ticks once per core clock), mmu-type, the DDR size and the Ethernet MAC/PHY
+ * options, and runs the C preprocessor with NOELV_NCPU (number of harts).
+ *
+ * PLIC: noelvsys has 4 contexts per hart (4h = M, 4h+1 = S, 4h+2/3 = VS,
+ * unused here), so every hart before the last lists two -1 placeholders.
+ *
+ * Interrupts: board UART, SD and Ethernet are PLIC sources 5, 6 and 7
+ * (sources 1-4 belong to noelvsys APBUART, GPTIMER and ETRACE). The boot ROM
+ * configures them as level-triggered.
+ *
+ * DMA: SD and Ethernet DMA are snooped by the L1 data cache (enabled by the
+ * boot ROM), so the devices are DMA-coherent.
+ */
+
+/ {
+  #address-cells = <2>;
+  #size-cells = <2>;
+  compatible = "vivado-risc-v,noelv-genesys2";
+  model = "NOEL-V on the vivado-risc-v Genesys 2 shell";
+
+  aliases {
+    serial0 = &uart0;
+    mmc0 = &mmc0;
+    ethernet0 = &eth0;
+  };
+
+  chosen {
+    stdout-path = "/soc/uart@60010000";
+  };
+
+  cpus {
+    #address-cells = <1>;
+    #size-cells = <0>;
+    timebase-frequency = <50000000>;
+
+    CPU0: cpu@0 {
+      clock-frequency = <50000000>;
+      compatible = "gaisler,noelv", "riscv";
+      device_type = "cpu";
+      reg = <0>;
+      status = "okay";
+      riscv,isa = "rv64imafdc_zicsr_zifencei_zba_zbb_zbs";
+      mmu-type = "riscv,sv39";
+      i-cache-size = <16384>;
+      d-cache-size = <16384>;
+
+      CPU0_intc: interrupt-controller {
+        #address-cells = <0>;
+        #interrupt-cells = <1>;
+        compatible = "riscv,cpu-intc";
+        interrupt-controller;
+      };
+    };
+#if NOELV_NCPU > 1
+    CPU1: cpu@1 {
+      clock-frequency = <50000000>;
+      compatible = "gaisler,noelv", "riscv";
+      device_type = "cpu";
+      reg = <1>;
+      status = "okay";
+      riscv,isa = "rv64imafdc_zicsr_zifencei_zba_zbb_zbs";
+      mmu-type = "riscv,sv39";
+      i-cache-size = <16384>;
+      d-cache-size = <16384>;
+
+      CPU1_intc: interrupt-controller {
+        #address-cells = <0>;
+        #interrupt-cells = <1>;
+        compatible = "riscv,cpu-intc";
+        interrupt-controller;
+      };
+    };
+#endif
+  };
+
+  /* noelvsys places its ACLINT at 0xb0000000, so DDR is 768 MiB. */
+  memory@80000000 {
+    device_type = "memory";
+    reg = <0x0 0x80000000 0x0 0x30000000>;
+  };
+
+  soc {
+    #address-cells = <2>;
+    #size-cells = <2>;
+    compatible = "simple-bus";
+    ranges;
+
+    clint@b0000000 {
+      compatible = "riscv,clint0";
+#if NOELV_NCPU > 1
+      interrupts-extended = <&CPU0_intc 3 &CPU0_intc 7 &CPU1_intc 3 &CPU1_intc 7>;
+#else
+      interrupts-extended = <&CPU0_intc 3 &CPU0_intc 7>;
+#endif
+      reg = <0x0 0xb0000000 0x0 0x00010000>;
+    };
+
+    PLIC0: interrupt-controller@fc000000 {
+      #address-cells = <0>;
+      #interrupt-cells = <1>;
+      compatible = "riscv,plic0";
+      interrupt-controller;
+#if NOELV_NCPU > 1
+      interrupts-extended = <&CPU0_intc 11 &CPU0_intc 9
+                             &CPU0_intc 0xffffffff &CPU0_intc 0xffffffff
+                             &CPU1_intc 11 &CPU1_intc 9>;
+#else
+      interrupts-extended = <&CPU0_intc 11 &CPU0_intc 9>;
+#endif
+      reg = <0x0 0xfc000000 0x0 0x04000000>;
+      riscv,max-priority = <7>;
+      riscv,ndev = <31>;
+    };
+
+    uart0: uart@60010000 {
+      compatible = "riscv,axi-uart-1.0";
+      reg = <0x0 0x60010000 0x0 0x00010000>;
+      interrupt-parent = <&PLIC0>;
+      interrupts = <5>;
+      port-number = <0>;
+    };
+
+    mmc0: mmc@60000000 {
+      compatible = "riscv,axi-sd-card-1.0";
+      reg = <0x0 0x60000000 0x0 0x00010000>;
+      clock = <100000000>;
+      bus-width = <4>;
+      fifo-depth = <256>;
+      interrupt-parent = <&PLIC0>;
+      interrupts = <6>;
+      max-frequency = <50000000>;
+      cap-sd-highspeed;
+      cap-mmc-highspeed;
+      cap-mmc-hw-reset;
+      no-sdio;
+    };
+
+    eth0: ethernet@60020000 {
+      compatible = "riscv,axi-ethernet-1.0";
+      reg = <0x0 0x60020000 0x0 0x00010000>;
+      interrupt-parent = <&PLIC0>;
+      interrupts = <7>;
+      phy-mode = "rgmii-rxid";
+      local-mac-address = [00 0a 35 00 00 02];
+    };
+  };
+};

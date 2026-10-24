@@ -15,8 +15,8 @@ static void usleep(unsigned us) {
 }
 
 // take snapshot of current CPU cycle count
-static inline uint32_t read_mcycle() {
-    uint32_t cycles;
+static inline uint64_t read_mcycle() {
+    uint64_t cycles;
     asm volatile ("csrr %0, mcycle" : "=r"(cycles));
     return cycles;
 }

@@ -11,6 +11,16 @@ JAVA_OPTIONS ?=
 VHDL_OPTIONS ?=
 CFG_FORMAT ?= mcs
 
+# CONFIG is the only SoC selector. Rocket and BOOM use the Scala generator;
+# CVA6 and NOEL-V are independent native backends even though their historical
+# configuration names retain the "rocket64" prefix.
+SOC_BACKEND := rocket
+ifneq ($(filter rocket64cva6%,$(CONFIG)),)
+SOC_BACKEND := cva6
+else ifneq ($(filter rocket64noelv%,$(CONFIG)),)
+SOC_BACKEND := noelv
+endif
+
 include board/$(BOARD)/Makefile.inc
 
 all: bitstream
@@ -160,6 +170,8 @@ workspace/patch-u-boot-done: u-boot/configs/vivado_riscv64_defconfig
 	mkdir -p workspace && touch workspace/patch-u-boot-done
 
 u-boot/u-boot-nodtb.bin: workspace/patch-u-boot-done $(U_BOOT_SRC)
+	cp -p -r patches/u-boot/vivado_riscv64 u-boot/board/vivado_riscv
+	cp -p patches/u-boot/vivado_riscv64.h u-boot/include/configs
 	$(MAKE) -C u-boot CROSS_COMPILE=$(CROSS_COMPILE_LINUX) BOARD=vivado_riscv64 vivado_riscv64_config
 	$(MAKE) -C u-boot \
 	  BOARD=vivado_riscv64 \
@@ -201,6 +213,9 @@ ROCKET_CLOCK_FREQ := $(shell echo - | awk '{printf("%.0f\n", $(ROCKET_FREQ_MHZ) 
 ROCKET_TIMEBASE_FREQ := $(shell echo - | awk '{printf("%.0f\n", $(ROCKET_FREQ_MHZ) * 10000)}')
 
 MEMORY_SIZE ?= 0x40000000
+
+# xsdb target name of the FPGA, e.g. xc7k325tffg900-2 -> xc7k325t
+FPGA_TARGET ?= $(shell echo $(XILINX_PART) | sed -E 's/^(xc[a-z0-9]*[0-9][a-z]?)[a-z]{2,}.*/\1/; s/-.*//')
 
 ifneq ($(findstring Rocket32t,$(CONFIG_SCALA)),)
   CROSS_COMPILE_NO_OS_TOOLS = $(realpath workspace/gcc/riscv/bin)/riscv32-unknown-elf-
@@ -294,6 +309,12 @@ workspace/$(CONFIG)/rocket.vhdl: workspace/$(CONFIG)/system-$(BOARD).v
 	  net.largest.riscv.vhdl.Main -m $(CONFIG_SCALA) $(VHDL_OPTIONS) \
 	  workspace/$(CONFIG)/system-$(BOARD).v >$@
 
+# --- native (non-Scala) SoC backends: CVA6 and NOEL-V ---
+
+ifneq ($(SOC_BACKEND),rocket)
+include mk/native.mk
+endif
+
 # --- utility make targets to run SBT command line ---
 
 .PHONY: sbt rocket-sbt
@@ -306,6 +327,11 @@ rocket-sbt:
 
 # --- generate Vivado Project ---
 
+.PHONY: soc-info
+
+soc-info:
+	@echo "CONFIG=$(CONFIG) SOC_BACKEND=$(SOC_BACKEND) BOARD=$(BOARD)"
+
 # Multi-threading appears broken in Vivado. It causes intermittent failures.
 MAX_THREADS ?= 1
 
@@ -314,7 +340,14 @@ MAX_THREADS ?= 1
 FPGA_FNM    ?= riscv_wrapper.bit
 
 proj_name   = $(BOARD)-riscv
+ifeq ($(SOC_BACKEND),rocket)
 proj_path   = workspace/$(CONFIG)/vivado-$(proj_name)
+SOC_HDL     = workspace/$(CONFIG)/rocket.vhdl workspace/$(CONFIG)/system-$(BOARD).v
+else
+# Native SoCs: keep the project apart from earlier TileLink-era projects.
+proj_path   = workspace/$(CONFIG)/vivado-$(BOARD)-native
+SOC_HDL     = $(NATIVE_SOC_DCP)
+endif
 proj_file   = $(proj_path)/$(proj_name).xpr
 proj_time   = $(proj_path)/timestamp.txt
 synthesis   = $(proj_path)/$(proj_name).runs/synth_1/riscv_wrapper.dcp
@@ -323,7 +356,7 @@ cfgmem_file = workspace/$(CONFIG)/$(proj_name).$(CFG_FORMAT)
 prm_file    = workspace/$(CONFIG)/$(proj_name).prm
 vivado      = env XILINX_LOCAL_USER_DATA=no vivado -mode batch -nojournal -nolog -notrace -quiet
 
-workspace/$(CONFIG)/system-$(BOARD).tcl: workspace/$(CONFIG)/rocket.vhdl workspace/$(CONFIG)/system-$(BOARD).v
+workspace/$(CONFIG)/system-$(BOARD).tcl: $(SOC_HDL)
 	echo "set_param general.maxThreads $(MAX_THREADS)" >$@
 	echo "set vivado_board_name $(BOARD)" >>$@
 	if [ "$(BOARD_PART)" != "" -a "$(BOARD_PART)" != "NONE" ] ; \
@@ -331,7 +364,15 @@ workspace/$(CONFIG)/system-$(BOARD).tcl: workspace/$(CONFIG)/rocket.vhdl workspa
 	  else echo "unset -nocomplain vivado_board_part" >>$@ ; fi
 	if [ "$(BOARD_CONFIG)" != "" ] ; then echo "set board_config $(BOARD_CONFIG)" >>$@ ; fi
 	echo "set xilinx_part $(XILINX_PART)" >>$@
+	echo "set soc_backend $(SOC_BACKEND)" >>$@
+ifeq ($(SOC_BACKEND),rocket)
 	echo "set rocket_module_name $(CONFIG_SCALA)" >>$@
+else
+	echo "set rocket_module_name $(NATIVE_MODULE)" >>$@
+	echo "set vivado_project_dir $(notdir $(proj_path))" >>$@
+	echo "set native_soc_shim $(abspath $(NATIVE_SOC_SHIM))" >>$@
+	echo "set native_soc_dir $(abspath $(NATIVE_SOC_DIR))" >>$@
+endif
 	echo "set riscv_clock_frequency $(ROCKET_FREQ_MHZ)" >>$@
 	echo "set memory_size $(MEMORY_SIZE)" >>$@
 	echo 'cd [file dirname [file normalize [info script]]]' >>$@
@@ -351,6 +392,7 @@ $(synthesis): $(proj_time)
 	echo "set_param general.maxThreads $(MAX_THREADS)" >$(proj_path)/make-synthesis.tcl
 	echo "open_project $(proj_file)" >>$(proj_path)/make-synthesis.tcl
 	echo "update_compile_order -fileset sources_1" >>$(proj_path)/make-synthesis.tcl
+	echo 'foreach core_run [get_runs -quiet -filter {NAME =~ "*RocketChip*_synth_1"}] { reset_run $$core_run; launch_runs $$core_run; wait_on_run $$core_run }' >>$(proj_path)/make-synthesis.tcl
 	echo "reset_run synth_1" >>$(proj_path)/make-synthesis.tcl
 	echo "launch_runs synth_1" >>$(proj_path)/make-synthesis.tcl
 	echo "wait_on_run synth_1" >>$(proj_path)/make-synthesis.tcl
@@ -403,6 +445,13 @@ else
 	echo "JTAG boot requires either ROOTFS=NFS or JTAG_BOOT=1" && exit 1
 endif
 
+# Program the FPGA only; the boot ROM then loads BOOT.ELF from the SD card.
+program: $(bitstream)
+	env HW_SERVER_URL=tcp:$(HW_SERVER_ADDR) FPGA_TARGET=$(FPGA_TARGET) \
+	  BITSTREAM=$(abspath $(bitstream)) \
+	  xsdb -quiet scripts/native/program-bitstream.tcl
+
+ifeq ($(SOC_BACKEND),rocket)
 jtag-boot: $(bitstream) linux-stable/arch/riscv/boot/Image debian-riscv64/ramdisk workspace/boot.elf
 	env HW_SERVER_URL=tcp:$(HW_SERVER_ADDR) \
 	 xsdb -quiet board/jtag-freq.tcl
@@ -411,6 +460,11 @@ jtag-boot: $(bitstream) linux-stable/arch/riscv/boot/Image debian-riscv64/ramdis
 	 xsdb -quiet board/jtag-boot.tcl
 
 # --- launch Vivado GUI ---
+
+else
+# Native SoCs have no XSDB memory-load flow yet: program and boot from SD.
+jtag-boot: program
+endif
 
 vivado-gui: $(proj_time)
 	vivado $(proj_file)

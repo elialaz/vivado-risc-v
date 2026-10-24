@@ -25,6 +25,7 @@
  */
 
 #include <common.h>
+#include <cpu_func.h>
 #include <malloc.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -187,6 +188,10 @@ static int sdc_setup_data_xfer(struct sdc_priv * dev, struct mmc * mmc, struct m
     timeout += (uint64_t)mmc->clock / 100; // 10ms
     if (timeout > 0xffffff) timeout = 0;
 
+    /* Write back dirty lines before the controller reads or writes DDR;
+     * stale lines over a read buffer are invalidated after the transfer. */
+    flush_dcache_range(addr, addr + data->blocksize * data->blocks);
+
     dev->regs->dma_addres = addr;
     dev->regs->block_size = data->blocksize - 1;
     dev->regs->block_count = data->blocks - 1;
@@ -285,6 +290,10 @@ static int sdc_send_cmd(struct udevice * udev, struct mmc_cmd * cmd, struct mmc_
 
     if (sdc_finish(dev, cmd) < 0) return -1;
     if (xfer && sdc_data_finish(dev) < 0) return -1;
+    if (xfer && (data->flags & MMC_DATA_READ)) {
+        unsigned long addr = (unsigned long)data->dest;
+        invalidate_dcache_range(addr, addr + data->blocksize * data->blocks);
+    }
 
     return 0;
 }

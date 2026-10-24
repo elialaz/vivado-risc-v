@@ -50,6 +50,14 @@ fi
 
 # --- build SD card image ---
 
+# Validate privilege access before modifying the existing image.  The loop
+# setup below needs root; without this check a non-interactive sudo failure
+# would occur only after rm/dd had already replaced a known-good image.
+if ! sudo -v ; then
+  echo "sudo authentication is required to build the SD image" >&2
+  exit 1
+fi
+
 mount -l | grep `pwd`/ | while IFS=' ' read -ra LINE ; do
   sudo umount ${LINE[0]}
 done

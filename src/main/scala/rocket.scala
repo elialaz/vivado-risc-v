@@ -10,7 +10,6 @@ import freechips.rocketchip.tile.{BuildRoCC, OpcodeSet}
 import freechips.rocketchip.util.DontTouch
 import freechips.rocketchip.system._
 import freechips.rocketchip.rocket._
-
 class RocketSystem(implicit p: Parameters) extends RocketSubsystem
     with HasAsyncExtInterrupts
     with CanHaveMasterAXI4MemPort
@@ -460,4 +459,34 @@ class Rocket64z2m extends Config(
   new WithNBreakpoints(8) ++
   new boom.v3.common.WithNMegaBooms(2) ++
   new WithExtMemSize(0x3f80000000L) ++
+  new RocketWideBusConfig)
+
+/*----------------- BOOM v4 --------------------------*/
+/*
+ * BOOM v4 is the development microarchitecture exposed by Chipyard.  Keep
+ * these names separate from the established BOOM v3 configurations above so
+ * updating the BOOM submodule never silently changes an existing bitstream.
+ */
+
+class Rocket64w1v4 extends Config(
+  new WithNBreakpoints(8) ++
+  new boom.v4.common.WithNSmallBooms(1) ++
+  new RocketBaseConfig)
+
+class Rocket64x1v4 extends Config(
+  new WithInclusiveCache  ++
+  new WithNBreakpoints(8) ++
+  new boom.v4.common.WithNMediumBooms(1) ++
+  new RocketWideBusConfig)
+
+class Rocket64y1v4 extends Config(
+  new WithInclusiveCache  ++
+  new WithNBreakpoints(8) ++
+  new boom.v4.common.WithNLargeBooms(1) ++
+  new RocketWideBusConfig)
+
+class Rocket64z1v4 extends Config(
+  new WithInclusiveCache  ++
+  new WithNBreakpoints(8) ++
+  new boom.v4.common.WithNMegaBooms(1) ++
   new RocketWideBusConfig)

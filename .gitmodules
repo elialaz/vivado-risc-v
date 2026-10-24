@@ -19,6 +19,7 @@
 [submodule "generators/riscv-boom"]
 	path = generators/riscv-boom
 	url = https://github.com/riscv-boom/riscv-boom.git
+	branch = master
 [submodule "generators/gemmini"]
 	path = generators/gemmini
 	url = https://github.com/ucb-bar/gemmini
@@ -31,3 +32,12 @@
 [submodule "bare-metal/dhrystone/benchmark-dhrystone"]
 	path = bare-metal/dhrystone/benchmark-dhrystone
 	url = https://github.com/sifive/benchmark-dhrystone.git
+[submodule "generators/cva6"]
+	path = generators/cva6
+	url = https://github.com/openhwgroup/cva6.git
+	branch = master
+[submodule "generators/grlib"]
+	path = generators/grlib
+	url = https://github.com/TUT-ASI/leon3-grlib-gpl-mirror.git
+	branch = main
+	ignore = untracked

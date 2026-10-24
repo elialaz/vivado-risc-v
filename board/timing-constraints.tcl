@@ -107,6 +107,9 @@ if { [llength [get_pins -quiet -hier jtag/TCK]] } {
 } elseif { [llength [get_pins -quiet -hier SERIES7_BSCAN*/TCK]] } {
   # Debug Bridge is used for debugging
   set tck_pin [get_pins -hier SERIES7_BSCAN*/TCK]
+} elseif { [llength [get_cells -quiet -hier -filter {REF_NAME == BSCANE2}]] } {
+  # Other BSCAN users, e.g. the GRLIB AHBJTAG debug link of the native NOEL-V
+  set tck_pin [get_pins -of_objects [get_cells -hier -filter {REF_NAME == BSCANE2}] -filter {REF_PIN_NAME == TCK}]
 }
 
 if { $tck_pin != "" } {
