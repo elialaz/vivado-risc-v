@@ -2,7 +2,7 @@
 # Board side of the Linux CoreMark runs (served by the host, run as root):
 #   python3 -c "<fetch linux-run.sh>" | sh -s <flavour> <runs> <core> [host]
 # (the board's Debian image has python3 but no wget/curl)
-# flavour: zb (CVA6/NOEL-V) or gc (BOOM). Prints one LINUX_CM line per run.
+# flavour: zb (CVA6/NOEL-V), gc (BOOM) or b (Shuttle). Prints one LINUX_CM line per run.
 FLAV=$1; RUNS=$2; CORE=$3; HOST=${4:-192.168.6.72:8000}
 cd /tmp || exit 1
 fetch() {

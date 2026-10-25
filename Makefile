@@ -11,14 +11,19 @@ JAVA_OPTIONS ?=
 VHDL_OPTIONS ?=
 CFG_FORMAT ?= mcs
 
-# CONFIG is the only SoC selector. Rocket and BOOM use the Scala generator;
-# CVA6 and NOEL-V are independent native backends even though their historical
-# configuration names retain the "rocket64" prefix.
+# CONFIG is the only SoC selector. Rocket, BOOM and Shuttle use the Scala
+# generator; CVA6, NOEL-V, VexiiRiscv and NaxRiscv are independent native
+# backends even though their configuration names keep the historical
+# "rocket64" prefix.
 SOC_BACKEND := rocket
 ifneq ($(filter rocket64cva6%,$(CONFIG)),)
 SOC_BACKEND := cva6
 else ifneq ($(filter rocket64noelv%,$(CONFIG)),)
 SOC_BACKEND := noelv
+else ifneq ($(filter rocket64vexii%,$(CONFIG)),)
+SOC_BACKEND := vexii
+else ifneq ($(filter rocket64nax%,$(CONFIG)),)
+SOC_BACKEND := nax
 endif
 
 include board/$(BOARD)/Makefile.inc
@@ -247,6 +252,7 @@ CHISEL_SRC_DIRS = \
   rocket-chip/hardfloat/src/main \
   generators/gemmini/src/main \
   generators/riscv-boom/src/main \
+  generators/shuttle/src/main \
   generators/sifive-cache/design/craft \
   generators/testchipip/src/main
 
@@ -309,7 +315,7 @@ workspace/$(CONFIG)/rocket.vhdl: workspace/$(CONFIG)/system-$(BOARD).v
 	  net.largest.riscv.vhdl.Main -m $(CONFIG_SCALA) $(VHDL_OPTIONS) \
 	  workspace/$(CONFIG)/system-$(BOARD).v >$@
 
-# --- native (non-Scala) SoC backends: CVA6 and NOEL-V ---
+# --- native (non-Scala) SoC backends: CVA6, NOEL-V, VexiiRiscv, NaxRiscv ---
 
 ifneq ($(SOC_BACKEND),rocket)
 include mk/native.mk

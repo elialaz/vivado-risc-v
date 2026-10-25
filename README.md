@@ -49,12 +49,19 @@ Nexys Video, Nexys A7 100T and Arty A7 100T are supported by free version of Viv
 
 If using a Digilent board, install [Vivado Board Files for Digilent FPGA Boards](https://github.com/Digilent/vivado-boards).
 
-### Extra requirements for the CVA6 and NOEL-V configurations
-The native CVA6 and NOEL-V SoCs are tested on Genesys 2 only (VCU118 support
-is in progress). Besides the packages from `make apt-install`, they need:
+### Extra requirements for the native configurations
+The native CVA6, NOEL-V, VexiiRiscv and NaxRiscv SoCs are tested on Genesys 2
+only (VCU118 support is in progress). Besides the packages from
+`make apt-install`, they need:
 * All submodules, recursively: `git submodule update --init --recursive`
   (CVA6 brings its own pinned dependencies; NOEL-V uses `generators/grlib`).
-* `python3` (CVA6 and NOEL-V boot ROM generators) and `patch`.
+  VexiiRiscv and NaxRiscv need only their `ext/SpinalHDL` and `ext/rvls`
+  submodules, which the build fetches itself; a recursive clone also pulls
+  their large simulator submodules, which are not used.
+* JDK 17 (already used by the Rocket flow) for the VexiiRiscv and NaxRiscv
+  generators; they compile SpinalHDL on first use (a few minutes, about
+  8 GB of JVM heap).
+* `python3` (boot ROM generators) and `patch`.
 * The repository RISC-V toolchain (`workspace/gcc`, built by the normal
   flow) for the boot ROMs.
 * NOEL-V only, optional: [GRMON](https://www.gaisler.com/grmon) from
@@ -113,6 +120,21 @@ Some of available CONFIG values (See [rocket.scala](https://github.com/eugene-ta
 
   BOOM v4 is less mature than BOOM v3. Start with `rocket64w1v4` on
   resource-constrained boards such as Genesys 2.
+* 64-bit Shuttle cores (UC Berkeley, Rocket Chip tile), Linux capable:
+  * `rocket64shuttle` - 2-wide in-order superscalar, 1 core (Linux tested)
+  * `rocket64shuttlehp` / `rocket64shuttlehp2` - larger branch predictors,
+    512 KiB L2 and a wide memory bus, 1 / 2 cores (Linux tested on one core;
+    the dual-core boot hangs, so `rocket64shuttlehp2` is bare metal only)
+* Native 64-bit VexiiRiscv SoCs (SpinalHDL, VexiiRiscv's own LiteX SoC
+  generator: coherent L2, CLINT, PLIC, debug TAP), 50 MHz on Genesys 2:
+  * `rocket64vexii` - single issue, LiteX "debian" options, 128 KiB L2 (Linux tested)
+  * `rocket64vexiihp` - dual issue with all IPC options, Zba/Zbb/Zbs,
+    32 KiB L1s, 256 KiB L2 (Linux tested)
+  * `rocket64vexiihp2` - 2 coherent HP harts (SMP Linux tested)
+* Native 64-bit NaxRiscv SoC (SpinalHDL, out of order, NaxRiscv's LiteX SoC
+  generator), 50 MHz on Genesys 2:
+  * `rocket64nax` - 2 decode / 2 ALU, RV64GC, 128 KiB L2 (bare metal only:
+    Linux faults in early boot, see [docs/hardware-status.md](docs/hardware-status.md))
 * Native 64-bit CVA6 SoCs (official OpenHW Group submodule), attached
   directly to the board AXI fabric, 1 core, 50 MHz on Genesys 2:
   * `rocket64cva6` - cv64a6_imafdc_sv39 (write-through), DDR uncached (slow;
@@ -129,7 +151,8 @@ Some of available CONFIG values (See [rocket.scala](https://github.com/eugene-ta
     tested)
 
 All SoCs use the normal build interface; only `CONFIG` changes the backend.
-CVA6 and NOEL-V do not use the Scala/TileLink generator path:
+CVA6, NOEL-V, VexiiRiscv and NaxRiscv do not use the Scala/TileLink generator
+path of this repository:
 ```
 git submodule update --init --recursive
 make CONFIG=rocket64cva6 BOARD=genesys2 vivado-project
@@ -166,6 +189,13 @@ Genesys 2 (xc7k325t, 203,800 LUTs), whole design including the board shell:
 | `rocket64w1v4` | 103,700 | 40.5 |
 | `rocket64x1` | 170,500 | - |
 | `rocket64x1v4` | 168,600 | 166.5 |
+| `rocket64shuttle` | 76,300 | 35.5 |
+| `rocket64shuttlehp` | 89,900 | 163.5 |
+| `rocket64shuttlehp2` (2 cores) | 138,800 | 192.5 |
+| `rocket64vexii` | 31,500 | 84 |
+| `rocket64vexiihp` | 45,200 | 141 |
+| `rocket64vexiihp2` (2 harts) | 70,100 | 188 |
+| `rocket64nax` | 46,400 | 79.5 |
 
 CoreMark/MHz measured on Genesys 2 (best of 5 validated runs; bare metal with
 GCC 15.1, Linux user space with GCC 11.4, so compare within a column). "Rel."
@@ -181,9 +211,15 @@ per-core `-flto` builds using the core's full ISA and `-mtune` models.
 | `rocket64noelvhp2s` (50, 1 hart) | 3.569 | 0.75 | 4.650 | 1.00 | 3.185 | 0.82 | 3.731 | 0.90 |
 | `rocket64x1` (50) | 4.773 | 1.00 | 4.654 | 1.00 | 3.874 | 1.00 | 4.158 | 1.00 |
 | `rocket64x1v4` (40) | 4.328 | 0.91 | 4.597 | 0.99 | - | - | - | - |
+| `rocket64shuttle` (50) | 3.011 | 0.63 | 3.848 | 0.83 | 2.666 | 0.69 | 3.159 | 0.76 |
+| `rocket64shuttlehp2` (50, 1 hart) | 3.022 | 0.63 | 3.883 | 0.83 | 2.719 | 0.70 | 3.266 | 0.79 |
+| `rocket64vexii` (50) | 2.382 | 0.50 | 2.752 | 0.59 | 2.079 | 0.54 | 2.508 | 0.60 |
+| `rocket64vexiihp` (50) | 3.545 | 0.74 | 4.535 | 0.97 | 3.189 | 0.82 | 3.802 | 0.91 |
+| `rocket64nax` (50) | 4.102 | 0.86 | 4.249 | 0.91 | - | - | - | - |
 
-`rocket64noelvhp2s` running two copies under Linux reaches 7.05 CoreMark/MHz
-in total (1.89x one copy). BOOM v4 Medium does not boot Linux (upstream bug);
+Running two copies under Linux, `rocket64noelvhp2s` reaches 7.05
+CoreMark/MHz in total (1.89x one copy) and `rocket64vexiihp2` 7.61 (2.01x).
+BOOM v4 Medium and NaxRiscv do not boot Linux (upstream core issues);
 details and per-flag results are in [docs/hardware-status.md](docs/hardware-status.md).
 
 ## Prepare the SD card
@@ -333,7 +369,9 @@ CVA6 ([OpenHW Group](https://github.com/openhwgroup/cva6), Solderpad/Apache)
 and NOEL-V ([Frontgrade Gaisler GRLIB GPL](https://www.gaisler.com/grlib-ip-library))
 are integrated as native SoCs on the same board shell, without Rocket Chip.
 NOEL-V bitstreams include GRLIB GPL-2.0-only HDL and must follow the GPL when
-distributed; see [LICENSE.md](LICENSE.md).
+distributed; see [LICENSE.md](LICENSE.md). Shuttle (UC Berkeley), VexiiRiscv
+and NaxRiscv (SpinalHDL, MIT) are integrated the same way: Shuttle through
+the Rocket Chip flow, the SpinalHDL cores as native SoCs.
 
 If not using provided SD card image: the bootrom loads and executes boot.elf file from SD card DOS partition.
 boot.elf is regular executable ELF, it can contain any software suitable for RISC-V RV64 M mode.

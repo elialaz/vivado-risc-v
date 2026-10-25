@@ -23,6 +23,9 @@ This repository integrates multiple third-party components under their respectiv
 | sifive-cache     | [Apache 2.0](https://github.com/chipsalliance/rocket-chip-inclusive-cache/blob/main/LICENSE) | From SiFive |
 | testchipip       | [BSD 3-Clause](https://github.com/ucb-bar/testchipip/blob/master/LICENSE) | Permissive BSD-style |
 | riscvboom        | [BSD 3-Clause](https://github.com/riscv-boom/riscv-boom/blob/master/LICENSE), [Apache 2.0 (SiFive)](https://github.com/riscv-boom/riscv-boom/blob/master/LICENSE.SiFive) | Dual-licensed |
+| Shuttle          | No license file in the upstream repository | UC Berkeley (ucb-bar), used unmodified as a submodule; check with the authors before redistributing |
+| VexiiRiscv       | [MIT](https://github.com/SpinalHDL/VexiiRiscv/blob/dev/LICENSE) | Generated with SpinalHDL (core LGPL-3.0, lib MIT); per SpinalHDL, the generated RTL is not restricted. Used unmodified as a submodule |
+| NaxRiscv         | [MIT](https://github.com/SpinalHDL/NaxRiscv/tree/main/LICENSES) | Same SpinalHDL terms as VexiiRiscv. Used unmodified as a submodule |
 | CVA6             | [Solderpad Hardware License 0.51](https://github.com/openhwgroup/cva6/blob/master/LICENSE) (some files SHL-2.0/2.1 or Apache 2.0) | Official OpenHW Group source, not relicensed; small local patches in `patches/cva6/` |
 | GRLIB GPL        | [GPL-2.0-only](https://www.gaisler.com/grlib-ip-library) | Frontgrade Gaisler release (includes NOEL-V) carried through a Git mirror; not relicensed or modified |
 | gemmini          | [BSD-style (Berkeley)](https://github.com/ucb-bar/gemmini/blob/master/LICENSE) | Custom BSD variant from UC Berkeley |

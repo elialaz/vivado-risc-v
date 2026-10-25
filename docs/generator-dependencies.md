@@ -9,6 +9,9 @@ this repository is the reproducible source of truth; the `branch` entries in
 | BOOM | `riscv-boom/riscv-boom`, `master` (stable pin, matches rocket-chip) | `b4283f3c07e1833d50d695dc3fc2b2734726b598` |
 | CVA6 | `openhwgroup/cva6`, `master` | `81245a47fad8fe1a5d562d953ef2662e099def76` |
 | GRLIB GPL | Frontgrade Gaisler 2026.2-b4300 | `2d4ae1f15bd942172e6aa0f9282bfeed73293f68` |
+| Shuttle | `ucb-bar/shuttle`, `master` (Mar 2025; builds with the pinned rocket-chip) | `2379b9b323013f9005aa008706d6feaca1893f0c` |
+| VexiiRiscv | `SpinalHDL/VexiiRiscv`, `dev` (LiteX pin) | `235753e24f2d960e49a0852205bae1400bf22c19` |
+| NaxRiscv | `SpinalHDL/NaxRiscv`, `main` (LiteX pin 2024.08-2025.12) | `ba63ee6dfb063e0e6b1c8da51071a85dea9f934b` |
 
 Frontgrade Gaisler publishes GRLIB GPL as release archives rather than through
 an official Git remote.  `generators/grlib` therefore uses the TUT-ASI Git
@@ -19,7 +22,8 @@ mirror of the unmodified release.  Its pinned tag is
 
 Do not modify generator submodules in place. Repository-specific CVA6 and
 GRLIB integration belongs in this repository's HDL wrappers, board shell, and
-build scripts. BOOM remains part of the Scala/Rocket-Chip generator path.
+build scripts. BOOM and Shuttle remain part of the Scala/Rocket-Chip
+generator path.
 
 Tool requirements beyond `make apt-install`: `python3` and `patch` (CVA6 and
 NOEL-V boot ROM generation, CVA6 patch copies), the repository RISC-V
@@ -28,6 +32,12 @@ Genesys 2. GRLIB's `make scripts` generates the NOEL-V source manifest in a
 scratch copy, so the submodule stays read-only. GRMON (Frontgrade Gaisler,
 evaluation version is enough) is needed only for NOEL-V JTAG debug, and GHDL
 only for the optional NOEL-V simulation scripts.
+
+VexiiRiscv and NaxRiscv generate their SoC with sbt and build SpinalHDL from
+their own `ext/SpinalHDL` submodule (JDK 17, about 8 GB of JVM heap, a few
+minutes). The build fetches only `ext/SpinalHDL` and `ext/rvls` from their
+nested submodules; the simulators and software submodules are not needed.
+The NaxRiscv core options are in `src/main/resources/nax/gen.scala`.
 
 Clone all generator dependencies, including CVA6's own pinned dependencies,
 with:
@@ -42,6 +52,9 @@ to select the common board shell and peripheral set. The configurations are:
 | CONFIG | Core |
 | --- | --- |
 | `rocket64w1v4` / `rocket64x1v4` / `rocket64y1v4` / `rocket64z1v4` | BOOM v4 Small / Medium / Large / Mega |
+| `rocket64shuttle` / `rocket64shuttlehp` / `rocket64shuttlehp2` | Shuttle (Rocket Chip tile, Scala flow) |
+| `rocket64vexii` / `rocket64vexiihp` / `rocket64vexiihp2` | VexiiRiscv (native, SpinalHDL) |
+| `rocket64nax` | NaxRiscv (native, SpinalHDL) |
 | `rocket64cva6` | CVA6 |
 | `rocket64noelv` | NOEL-V from GRLIB |
 

@@ -490,3 +490,49 @@ class Rocket64z1v4 extends Config(
   new WithNBreakpoints(8) ++
   new boom.v4.common.WithNMegaBooms(1) ++
   new RocketWideBusConfig)
+
+/*----------------- Shuttle --------------------------*/
+
+/* Shuttle (ucb-bar/shuttle): dual-issue in-order superscalar core on the
+ * Rocket Chip tile interface. Pinned to 2379b9b (Mar 2025), which still builds
+ * with this rocket-chip, has the D-cache/writeback fixes an older pin lacked
+ * (Linux hung there) and builds the D-cache from the configured parameters.
+ * JTAG debug does not enumerate on this pin.
+ */
+class Rocket64shuttle extends Config(
+  new WithNBreakpoints(8) ++
+  new shuttle.common.WithNShuttleCores(1) ++
+  new RocketBaseConfig)
+
+/* Shuttle HP: bigger BTB/RAS/BHT and a 512 KiB inclusive L2 on the wide
+ * memory bus. Issue/retire stays 2-wide: with 3-wide retire (Chipyard's
+ * Shuttle3WideConfig) Linux corrupts kernel stacks on this revision, as it
+ * does with the base config plus 3-wide retire alone. L1 caches stay at the
+ * Shuttle defaults, and fetch at 8 bytes (wider fetch does not elaborate in
+ * this revision).
+ */
+class WithShuttleHPBranchPredictor extends Config((site, here, up) => {
+  case TilesLocated(InSubsystem) => up(TilesLocated(InSubsystem), site) map {
+    case tp: shuttle.common.ShuttleTileAttachParams => tp.copy(tileParams = tp.tileParams.copy(
+      btb = Some(BTBParams(nEntries = 64, nRAS = 8,
+        bhtParams = Some(BHTParams(nEntries = 1024, counterLength = 2))))))
+    case other => other
+  }
+})
+
+class WithShuttleHP extends Config(
+  new WithShuttleHPBranchPredictor)
+
+class Rocket64shuttlehp extends Config(
+  new WithInclusiveCache  ++
+  new WithNBreakpoints(8) ++
+  new WithShuttleHP ++
+  new shuttle.common.WithNShuttleCores(1) ++
+  new RocketWideBusConfig)
+
+class Rocket64shuttlehp2 extends Config(
+  new WithInclusiveCache  ++
+  new WithNBreakpoints(8) ++
+  new WithShuttleHP ++
+  new shuttle.common.WithNShuttleCores(2) ++
+  new RocketWideBusConfig)

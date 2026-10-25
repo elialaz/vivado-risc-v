@@ -51,7 +51,28 @@ march_boomw1v4  := rv64imafdc_zicsr_zifencei
 tune1_boomw1v4  := generic-ooo
 tune2_boomw1v4  := sifive-p400-series
 mhz_boomw1v4    := 50
-CORES := cva6hp cva6hp2 noelvhp noelvhp2s boomx1 boomx1v4 boomw1v4
+march_shuttle   := rv64imafdc_zicsr_zifencei_zfh_zba_zbb_zbs
+tune1_shuttle   := sifive-7-series
+tune2_shuttle   := rocket
+mhz_shuttle     := 50
+defs_shuttle    := -DSMODE
+march_vexii     := rv64imafdc_zicsr_zifencei
+tune1_vexii     := sifive-7-series
+tune2_vexii     := rocket
+mhz_vexii       := 50
+defs_vexii      := -DSMODE
+march_vexiihp   := rv64imafdc_zicsr_zifencei_zba_zbb_zbs
+tune1_vexiihp   := sifive-7-series
+tune2_vexiihp   := rocket
+mhz_vexiihp     := 50
+defs_vexiihp    := -DSMODE
+march_nax       := rv64imafdc_zicsr_zifencei
+tune1_nax       := generic-ooo
+tune2_nax       := sifive-p400-series
+mhz_nax         := 50
+defs_nax        := -DSMODE
+
+CORES := cva6hp cva6hp2 noelvhp noelvhp2s boomx1 boomx1v4 boomw1v4 shuttle vexii vexiihp nax
 MODES := base opt opt2
 
 BASE_FLAGS := -O2 -march=rv64imafdc_zicsr_zifencei -mabi=lp64d

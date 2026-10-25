@@ -41,3 +41,15 @@
 	url = https://github.com/TUT-ASI/leon3-grlib-gpl-mirror.git
 	branch = main
 	ignore = untracked
+[submodule "generators/shuttle"]
+	path = generators/shuttle
+	url = https://github.com/ucb-bar/shuttle.git
+	branch = master
+[submodule "generators/vexiiriscv"]
+	path = generators/vexiiriscv
+	url = https://github.com/SpinalHDL/VexiiRiscv.git
+	branch = dev
+[submodule "generators/naxriscv"]
+	path = generators/naxriscv
+	url = https://github.com/SpinalHDL/NaxRiscv.git
+	branch = main

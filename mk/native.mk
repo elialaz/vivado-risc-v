@@ -1,4 +1,4 @@
-# Native (non-Scala) SoC backends: CVA6 and NOEL-V.
+# Native (non-Scala) SoC backends: CVA6, NOEL-V, VexiiRiscv and NaxRiscv.
 #
 # Each backend is synthesized on its own into an out-of-context netlist
 # (NATIVE_SOC_DCP). The root Makefile then builds the normal board project
@@ -303,5 +303,182 @@ SIM_MAX_US   ?= 20000
 GHDL         ?= ghdl
 native-sim: scripts/native/sim-noelv-ghdl.sh $(NOELV_ROM_VHD) $(NOELV_VHDL) $(wildcard $(NOELV_RES)/sim/*.vhd)
 	GHDL=$(GHDL) scripts/native/sim-noelv-ghdl.sh $(NATIVE_DIR)/sim $(NOELV_ROM_VHD) $(NOELV_CFG) $(SIM_TX_BYTES) $(SIM_MAX_US)
+
+else ifneq ($(filter vexii nax,$(SOC_BACKEND)),)
+
+# --- SpinalHDL SoCs: VexiiRiscv and NaxRiscv --------------------------------
+#
+# The SoC (harts, L1/L2, TileLink coherency, CLINT, PLIC, debug TAP) comes
+# from the core's own LiteX SoC generator, run from its pinned submodule
+# (SpinalHDL is built from the submodule's ext/SpinalHDL):
+#   VexiiRiscv: vexiiriscv.soc.litex.SocGen
+#   NaxRiscv:   naxriscv.platform.litex.NaxGen (core options in
+#               src/main/resources/nax/gen.scala)
+# Both give the same bus ports. SpinalBoardWrapper adds the boot ROM and
+# adapts the buses to the board shell; <core>/spinal_soc_inst.vh holds the
+# SoC instance.
+
+ifeq ($(SOC_BACKEND),vexii)
+
+# Core options follow LiteX's "debian" variant (base) and VexiiRiscv's
+# --max-ipc set (HP).
+VEXII_ISA_ARGS   := --with-isa=m,a,f,d,c,s,u,zicntr,zihpm
+VEXII_BASE_ARGS  := --xlen=64 --with-mul --with-div --allow-bypass-from=0 \
+                    --fetch-l1 --fetch-l1-ways=4 --fetch-l1-mem-data-width-min=64 \
+                    --lsu-l1 --lsu-l1-ways=4 --lsu-l1-mem-data-width-min=64 \
+                    --with-lsu-bypass --relaxed-branch --with-btb --with-ras --with-gshare
+# HP: dual issue and every IPC option of --max-ipc (late ALU, aligner and
+# dispatcher buffers, 8 refill/writeback slots, store buffer, prefetchers),
+# Zba/Zbb/Zbs, 8-way 32 KiB L1s (the MMU caps L1s at 64 sets) and a
+# full-accuracy FPU.
+VEXII_HP_ARGS    := $(VEXII_BASE_ARGS) --dual-issue --max-ipc \
+                    --with-rvZba --with-rvZbb --with-rvZbs \
+                    --fetch-l1-ways=8 --lsu-l1-ways=8
+
+ifeq ($(CONFIG),rocket64vexii)
+  SPINAL_CORE_ARGS := $(VEXII_BASE_ARGS) --fma-reduced-accuracy --fpu-ignore-subnormal $(VEXII_ISA_ARGS)
+  SPINAL_NCPU      := 1
+  SPINAL_L2        := 131072
+  SPINAL_ISA       := rv64imafdc_zicntr_zihpm
+else ifeq ($(CONFIG),rocket64vexiihp)
+  SPINAL_CORE_ARGS := $(VEXII_HP_ARGS) $(VEXII_ISA_ARGS)
+  SPINAL_NCPU      := 1
+  SPINAL_L2        := 262144
+  SPINAL_ISA       := rv64imafdc_zicntr_zihpm_zba_zbb_zbs
+else ifeq ($(CONFIG),rocket64vexiihp2)
+  SPINAL_CORE_ARGS := $(VEXII_HP_ARGS) $(VEXII_ISA_ARGS)
+  SPINAL_NCPU      := 2
+  SPINAL_L2        := 262144
+  SPINAL_ISA       := rv64imafdc_zicntr_zihpm_zba_zbb_zbs
+else
+  $(error Unknown VexiiRiscv configuration $(CONFIG))
+endif
+SPINAL_ROOT    := $(abspath generators/vexiiriscv)
+SPINAL_SOC     := VexiiSoc
+SPINAL_COMPAT  := spinalhdl,vexiiriscv
+SPINAL_NAME    := VexiiRiscv
+SPINAL_GEN     := vexiiriscv.soc.litex.SocGen $(SPINAL_CORE_ARGS)
+SPINAL_IO_REGIONS := --memory-region=1610612736,536870912,rw,p
+
+else
+
+# NaxRiscv: out-of-order, 2 decode / 2 ALU (LiteX "Debian" setup), RV64GC.
+NAX_SCALA_ARGS := rvc=true,rvf=true,rvd=true,alu-count=2,decode-count=2
+ifeq ($(CONFIG),rocket64nax)
+  SPINAL_NCPU := 1
+else
+  $(error Unknown NaxRiscv configuration $(CONFIG))
+endif
+SPINAL_L2      := 131072
+SPINAL_ISA     := rv64imafdc_zicntr_zihpm
+SPINAL_ROOT    := $(abspath generators/naxriscv)
+SPINAL_SOC     := NaxSoc
+SPINAL_COMPAT  := spinalhdl,naxriscv
+SPINAL_NAME    := NaxRiscv
+SPINAL_GEN     := naxriscv.platform.litex.NaxGen --xlen=64 --with-debug \
+                  --scala-file=$(abspath src/main/resources/nax/gen.scala) \
+                  --scala-args=$(NAX_SCALA_ARGS)
+# NaxRiscv needs IO ranges marked "io" (ordered, uncached) as well as the
+# peripheral endpoint, as LiteX passes them; 0xF000_0000-0xFFFF_FFFF (CLINT,
+# PLIC) is an io range too.
+SPINAL_IO_REGIONS := --memory-region=1610612736,536870912,io,p \
+                     --memory-region=1610612736,536870912,rw,p \
+                     --memory-region=4026531840,268435456,io,p
+
+endif
+SPINAL_L2_WAYS ?= 8
+
+NATIVE_MODULE   := SpinalBoardVivado
+NATIVE_SOC_SHIM := src/main/resources/spinal/SpinalBoardVivado.v
+
+SPINAL_RES      := src/main/resources/spinal
+SPINAL_INST_DIR := $(abspath src/main/resources/$(SOC_BACKEND))
+SPINAL_GEN_DIR  := $(abspath $(NATIVE_DIR)/$(SOC_BACKEND))
+SPINAL_NETLIST  := $(SPINAL_GEN_DIR)/$(SPINAL_SOC).v
+SPINAL_ROM_DIR  := $(abspath $(NATIVE_DIR)/bootrom)
+SPINAL_ROM_DTS  := $(SPINAL_ROM_DIR)/spinal.dts
+SPINAL_ROM_DTB  := $(SPINAL_ROM_DIR)/spinal.dtb
+SPINAL_ROM_ELF  := $(SPINAL_ROM_DIR)/bootrom.elf
+SPINAL_ROM_IMG  := $(SPINAL_ROM_DIR)/bootrom.img
+SPINAL_ROM_HEX  := $(SPINAL_ROM_DIR)/bootrom.hex
+
+# Memory map seen by the harts: boot ROM (pBus, cached, executable), board
+# IO (pBus), DDR (mBus, cached). CLINT 0xF001_0000 and PLIC 0xF0C0_0000 are
+# the generator defaults.
+SPINAL_SOC_ARGS := --reset-vector=65536 \
+  --memory-region=65536,65536,rxc,p $(SPINAL_IO_REGIONS) \
+  --memory-region=2147483648,1073741824,rwxc,m \
+  --litedram-width=64 --with-dma --with-jtag-tap \
+  --cpu-count=$(SPINAL_NCPU) --l2-bytes=$(SPINAL_L2) --l2-ways=$(SPINAL_L2_WAYS)
+SPINAL_GEN_CMD := runMain $(strip $(SPINAL_GEN)) $(SPINAL_SOC_ARGS) \
+  --netlist-name=$(SPINAL_SOC) --netlist-directory=$(SPINAL_GEN_DIR)
+
+# Regenerate when the arguments or the submodule revision change.
+SPINAL_STAMP := $(NATIVE_DIR)/spinal-gen.txt
+SPINAL_STAMP_TEXT := $(shell git -C $(SPINAL_ROOT) rev-parse HEAD 2>/dev/null) $(SPINAL_GEN_CMD)
+$(shell mkdir -p $(NATIVE_DIR) && [ "`cat $(SPINAL_STAMP) 2>/dev/null`" = "$(SPINAL_STAMP_TEXT)" ] || echo "$(SPINAL_STAMP_TEXT)" >$(SPINAL_STAMP))
+
+# Only ext/SpinalHDL and ext/rvls are needed from the core's own submodules
+# (not its simulators and software).
+$(SPINAL_NETLIST): $(SPINAL_STAMP) $(wildcard src/main/resources/$(SOC_BACKEND)/*.scala)
+	git -C $(SPINAL_ROOT) submodule update --init ext/SpinalHDL ext/rvls
+	rm -rf $(SPINAL_GEN_DIR)
+	mkdir -p $(SPINAL_GEN_DIR)
+	cd $(SPINAL_ROOT) && $(JAVA_PATH)/java -Xmx8G -Xss8M $(JAVA_OPTIONS) \
+	  -Dsbt.io.virtual=false -Dsbt.server.autostart=false \
+	  -jar $(abspath sbt-launch.jar) "$(SPINAL_GEN_CMD)" >$(SPINAL_GEN_DIR)/socgen.log 2>&1 || \
+	  { tail -40 $(SPINAL_GEN_DIR)/socgen.log ; exit 1 ; }
+	test -f $@
+
+$(SPINAL_ROM_DTS): $(SPINAL_RES)/genesys2.dts
+	mkdir -p $(SPINAL_ROM_DIR)
+	cpp -P -nostdinc -undef -x assembler-with-cpp -DSPINAL_NCPU=$(SPINAL_NCPU) \
+	  '-DSPINAL_COMPAT="$(SPINAL_COMPAT)"' \
+	  '-DSPINAL_MODEL="$(SPINAL_NAME) on the vivado-risc-v Genesys 2 shell"' $< >$@
+	sed -i "s#clock-frequency = <[0-9]*>#clock-frequency = <$(ROCKET_CLOCK_FREQ)>#g" $@
+	sed -i "s#timebase-frequency = <[0-9]*>#timebase-frequency = <$(ROCKET_CLOCK_FREQ)>#g" $@
+	sed -i 's#riscv,isa = ".*"#riscv,isa = "$(SPINAL_ISA)"#g' $@
+	if [ ! -z "$(ETHER_MAC)" ] ; then sed -i "s#local-mac-address = \[.*\]#local-mac-address = [$(ETHER_MAC)]#g" $@ ; fi
+	if [ ! -z "$(ETHER_PHY)" ] ; then sed -i "s#phy-mode = \".*\"#phy-mode = \"$(ETHER_PHY)\"#g" $@ ; fi
+
+$(SPINAL_ROM_DTB): $(SPINAL_ROM_DTS)
+	dtc -I dts -O dtb -o $@ $<
+
+# Reset stage followed by the common repository board loader, linked with
+# the stock bootrom.lds at the 0x10000 reset vector.
+$(SPINAL_ROM_HEX): $(SPINAL_RES)/bootrom/board-head.S scripts/native/gen-romhex.py \
+    bootrom/bootrom.lds bootrom/bootrom.c bootrom/kprintf.c \
+    bootrom/ff.c bootrom/ffunicode.c bootrom/common.h $(SPINAL_ROM_DTB)
+	cd $(SPINAL_ROM_DIR) && \
+	  $(CROSS_COMPILE_NO_OS_TOOLS)gcc \
+	  -Os -g -march=rv64im -mabi=lp64 -mcmodel=medany -mexplicit-relocs \
+	  -ffreestanding -fno-builtin -ffunction-sections -fdata-sections \
+	  -DDEVICE_TREE='"spinal.dtb"' -I$(abspath bootrom) \
+	  -nostdlib -nostartfiles -Wl,--gc-sections \
+	  -T $(abspath bootrom/bootrom.lds) \
+	  $(abspath $(SPINAL_RES)/bootrom/board-head.S) \
+	  $(abspath bootrom/bootrom.c) $(abspath bootrom/kprintf.c) \
+	  $(abspath bootrom/ff.c) $(abspath bootrom/ffunicode.c) \
+	  -o $(SPINAL_ROM_ELF)
+	$(CROSS_COMPILE_NO_OS_TOOLS)objcopy -O binary $(SPINAL_ROM_ELF) $(SPINAL_ROM_IMG)
+	python3 scripts/native/gen-romhex.py $(SPINAL_ROM_IMG) $@
+
+.PHONY: spinal-netlist
+spinal-netlist: $(SPINAL_NETLIST)
+
+$(NATIVE_SOC_DCP): scripts/native/synth-spinal.tcl $(SPINAL_NETLIST) $(SPINAL_ROM_HEX) \
+    $(SPINAL_RES)/SpinalBoardWrapper.v $(SPINAL_RES)/SpinalRams.v $(SPINAL_INST_DIR)/spinal_soc_inst.vh
+	mkdir -p $(NATIVE_SOC_DIR)
+	echo "set repo_root $(abspath .)" >$(NATIVE_DIR)/synth-soc.tcl
+	echo "set soc_part $(XILINX_PART)" >>$(NATIVE_DIR)/synth-soc.tcl
+	echo "set soc_threads $(NATIVE_THREADS)" >>$(NATIVE_DIR)/synth-soc.tcl
+	echo "set soc_out_dir $(abspath $(NATIVE_SOC_DIR))" >>$(NATIVE_DIR)/synth-soc.tcl
+	echo "set soc_clock_mhz $(ROCKET_FREQ_MHZ)" >>$(NATIVE_DIR)/synth-soc.tcl
+	echo "set spinal_netlist $(SPINAL_NETLIST)" >>$(NATIVE_DIR)/synth-soc.tcl
+	echo "set spinal_inst $(SPINAL_INST_DIR)" >>$(NATIVE_DIR)/synth-soc.tcl
+	echo "set spinal_rom_hex $(SPINAL_ROM_HEX)" >>$(NATIVE_DIR)/synth-soc.tcl
+	echo 'source [file join $$repo_root scripts native synth-spinal.tcl]' >>$(NATIVE_DIR)/synth-soc.tcl
+	cd $(NATIVE_DIR) && $(NATIVE_VIVADO) -log synth-soc.log -source synth-soc.tcl
+	test -f $@
 
 endif

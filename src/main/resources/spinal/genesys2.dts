@@ -1,0 +1,187 @@
+/dts-v1/;
+
+/*
+ * SpinalHDL LiteX-style SoCs (VexiiRiscv, NaxRiscv) on the vivado-risc-v
+ * Genesys 2 shell. mk/native.mk substitutes clock-frequency,
+ * timebase-frequency (CLINT mtime ticks once per core clock), riscv,isa and
+ * the Ethernet MAC/PHY options, and runs the C preprocessor with SPINAL_NCPU
+ * (number of harts, 1 to 4), SPINAL_COMPAT (CPU compatible string) and
+ * SPINAL_MODEL (model string).
+ *
+ * PLIC: SpinalHDL PLIC with the SiFive register layout, two contexts per hart
+ * (2h = M, 2h+1 = S), 2-bit priorities. Board UART, SD and Ethernet are
+ * sources 1, 2 and 3, as on Rocket.
+ *
+ * DMA: the board DMA port enters the coherent TileLink fabric in front of
+ * the L2, so the devices are DMA-coherent.
+ */
+
+/ {
+  #address-cells = <2>;
+  #size-cells = <2>;
+  compatible = "vivado-risc-v,spinalhdl-genesys2";
+  model = SPINAL_MODEL;
+
+  aliases {
+    serial0 = &uart0;
+    mmc0 = &mmc0;
+    ethernet0 = &eth0;
+  };
+
+  chosen {
+    stdout-path = "/soc/uart@60010000";
+  };
+
+  cpus {
+    #address-cells = <1>;
+    #size-cells = <0>;
+    timebase-frequency = <50000000>;
+    CPU0: cpu@0 {
+      clock-frequency = <50000000>;
+      compatible = SPINAL_COMPAT, "riscv";
+      device_type = "cpu";
+      reg = <0>;
+      status = "okay";
+      riscv,isa = "rv64imafdc";
+      mmu-type = "riscv,sv39";
+      CPU0_intc: interrupt-controller {
+        #address-cells = <0>;
+        #interrupt-cells = <1>;
+        compatible = "riscv,cpu-intc";
+        interrupt-controller;
+      };
+    };
+#if SPINAL_NCPU > 1
+    CPU1: cpu@1 {
+      clock-frequency = <50000000>;
+      compatible = SPINAL_COMPAT, "riscv";
+      device_type = "cpu";
+      reg = <1>;
+      status = "okay";
+      riscv,isa = "rv64imafdc";
+      mmu-type = "riscv,sv39";
+      CPU1_intc: interrupt-controller {
+        #address-cells = <0>;
+        #interrupt-cells = <1>;
+        compatible = "riscv,cpu-intc";
+        interrupt-controller;
+      };
+    };
+#endif
+#if SPINAL_NCPU > 2
+    CPU2: cpu@2 {
+      clock-frequency = <50000000>;
+      compatible = SPINAL_COMPAT, "riscv";
+      device_type = "cpu";
+      reg = <2>;
+      status = "okay";
+      riscv,isa = "rv64imafdc";
+      mmu-type = "riscv,sv39";
+      CPU2_intc: interrupt-controller {
+        #address-cells = <0>;
+        #interrupt-cells = <1>;
+        compatible = "riscv,cpu-intc";
+        interrupt-controller;
+      };
+    };
+#endif
+#if SPINAL_NCPU > 3
+    CPU3: cpu@3 {
+      clock-frequency = <50000000>;
+      compatible = SPINAL_COMPAT, "riscv";
+      device_type = "cpu";
+      reg = <3>;
+      status = "okay";
+      riscv,isa = "rv64imafdc";
+      mmu-type = "riscv,sv39";
+      CPU3_intc: interrupt-controller {
+        #address-cells = <0>;
+        #interrupt-cells = <1>;
+        compatible = "riscv,cpu-intc";
+        interrupt-controller;
+      };
+    };
+#endif
+  };
+
+  memory@80000000 {
+    device_type = "memory";
+    reg = <0x0 0x80000000 0x0 0x40000000>;
+  };
+
+  soc {
+    #address-cells = <2>;
+    #size-cells = <2>;
+    compatible = "simple-bus";
+    ranges;
+
+    clint@f0010000 {
+      compatible = "riscv,clint0";
+      interrupts-extended = <&CPU0_intc 3 &CPU0_intc 7
+#if SPINAL_NCPU > 1
+                             &CPU1_intc 3 &CPU1_intc 7
+#endif
+#if SPINAL_NCPU > 2
+                             &CPU2_intc 3 &CPU2_intc 7
+#endif
+#if SPINAL_NCPU > 3
+                             &CPU3_intc 3 &CPU3_intc 7
+#endif
+                             >;
+      reg = <0x0 0xf0010000 0x0 0x00010000>;
+    };
+
+    PLIC0: interrupt-controller@f0c00000 {
+      #address-cells = <0>;
+      #interrupt-cells = <1>;
+      compatible = "sifive,plic-1.0.0", "riscv,plic0";
+      interrupt-controller;
+      interrupts-extended = <&CPU0_intc 11 &CPU0_intc 9
+#if SPINAL_NCPU > 1
+                             &CPU1_intc 11 &CPU1_intc 9
+#endif
+#if SPINAL_NCPU > 2
+                             &CPU2_intc 11 &CPU2_intc 9
+#endif
+#if SPINAL_NCPU > 3
+                             &CPU3_intc 11 &CPU3_intc 9
+#endif
+                             >;
+      reg = <0x0 0xf0c00000 0x0 0x00400000>;
+      riscv,max-priority = <3>;
+      riscv,ndev = <31>;
+    };
+
+    uart0: uart@60010000 {
+      compatible = "riscv,axi-uart-1.0";
+      reg = <0x0 0x60010000 0x0 0x00010000>;
+      interrupt-parent = <&PLIC0>;
+      interrupts = <1>;
+      port-number = <0>;
+    };
+
+    mmc0: mmc@60000000 {
+      compatible = "riscv,axi-sd-card-1.0";
+      reg = <0x0 0x60000000 0x0 0x00010000>;
+      clock = <100000000>;
+      bus-width = <4>;
+      fifo-depth = <256>;
+      interrupt-parent = <&PLIC0>;
+      interrupts = <2>;
+      max-frequency = <50000000>;
+      cap-sd-highspeed;
+      cap-mmc-highspeed;
+      cap-mmc-hw-reset;
+      no-sdio;
+    };
+
+    eth0: ethernet@60020000 {
+      compatible = "riscv,axi-ethernet-1.0";
+      reg = <0x0 0x60020000 0x0 0x00010000>;
+      interrupt-parent = <&PLIC0>;
+      interrupts = <3>;
+      phy-mode = "rgmii-rxid";
+      local-mac-address = [00 0a 35 00 00 02];
+    };
+  };
+};

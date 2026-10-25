@@ -94,7 +94,11 @@ void report_trap(unsigned long cause, unsigned long epc, unsigned long tval) {
 /* ---- timing ---- */
 static inline uint64_t rdmcycle(void) {
     uint64_t c;
+#ifdef SMODE
+    asm volatile("rdcycle %0" : "=r"(c));   /* S-mode: cycle (mcounteren.CY) */
+#else
     asm volatile("csrr %0, mcycle" : "=r"(c));
+#endif
     return c;
 }
 static CORE_TICKS start_time_val, stop_time_val;

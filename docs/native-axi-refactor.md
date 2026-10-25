@@ -118,7 +118,8 @@ Both native backends are implemented and pass on the Genesys 2 board shell:
 | `rocket64noelvhp2` | not run (does not fit xc7k325t) | same as hp2s |
 
 Build flow: each SoC is synthesized out of context as its own netlist
-(`scripts/native/synth-cva6.tcl`, `synth-noelv.tcl`). The root Makefile then
+(`scripts/native/synth-cva6.tcl`, `synth-noelv.tcl`, and `synth-spinal.tcl`
+for VexiiRiscv and NaxRiscv, which share `SpinalBoardWrapper`). The root Makefile then
 builds the normal board project from `vivado.tcl` with that netlist in place
 of the Rocket Chip HDL, so no SystemVerilog header or GRLIB library reaches
 the board IP runs, and the project/bitstream/flash targets are shared with
@@ -131,7 +132,8 @@ CVA6 source fixes are kept as patches (`patches/cva6/*.patch`, and per config
 See `docs/hardware-status.md` for the root causes, limits, benchmarks and debug notes.
 
 Remaining work: VCU118 shell for the same backends (including the full
-`rocket64noelvhp2`), and the CVA6 baseline systemd failure. Planned
-additional cores, in this order: Shuttle (Rocket Chip flow), VexiiRiscv and
-NaxRiscv (native, SpinalHDL), BlackParrot, OpenC910 (single core and SMP) and
+`rocket64noelvhp2`), the CVA6 baseline systemd failure, the Shuttle HP and
+NaxRiscv Linux failures (see `docs/hardware-status.md`). Added since: Shuttle
+(Rocket Chip flow), VexiiRiscv and NaxRiscv (native, SpinalHDL). Planned
+next, in this order: BlackParrot, OpenC910 (single core and SMP) and
 XiangShan; the larger ones target VCU118.

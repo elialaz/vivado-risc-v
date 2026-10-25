@@ -13,6 +13,7 @@ lazy val commonSettings = Seq(
 lazy val vivado = (project in file("."))
   .dependsOn(cde)
   .dependsOn(boom)
+  .dependsOn(shuttle)
   .dependsOn(rocketchip)
   .dependsOn(sifive_cache)
   .dependsOn(gemmini)
@@ -59,6 +60,11 @@ lazy val boom = Project(id = "boom", base = file("generators/riscv-boom") / "src
   .dependsOn(testchipip)
   .settings(commonSettings)
   .settings(scalaSource in Compile := baseDirectory.value / "main/scala")
+
+lazy val shuttle = (project in file("generators/shuttle"))
+  .dependsOn(cde)
+  .dependsOn(rocketchip)
+  .settings(commonSettings)
 
 lazy val sifive_cache = (project in file("generators/sifive-cache"))
   .dependsOn(cde)
