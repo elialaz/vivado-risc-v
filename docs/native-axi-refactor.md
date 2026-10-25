@@ -135,10 +135,3 @@ Remaining work: VCU118 shell for the same backends (including the full
 `rocket64noelvhp2`), the CVA6 baseline systemd failure, the Shuttle HP and
 NaxRiscv Linux failures (see `docs/hardware-status.md`). Added since: Shuttle
 (Rocket Chip flow), VexiiRiscv and NaxRiscv (native, SpinalHDL).
-
-BlackParrot was tried as a native backend and dropped. On Genesys 2 its
-boot ROM loaded `BOOT.ELF` from SD, but OpenSBI trapped (illegal
-instruction) on its first compressed instructions after the `fence.i`
-hand-off, because the core fetched instruction bits that do not match the
-image. The cause was not found. Development stopped at this point; OpenC910
-and XiangShan were not started.
