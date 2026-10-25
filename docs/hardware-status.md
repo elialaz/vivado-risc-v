@@ -26,6 +26,15 @@ program with `make ... program`. All run at 50 MHz except BOOM v4 Medium
 | `rocket64vexiihp2` | 2 x VexiiRiscv HP, coherent | **SMP Linux login** (2 CPUs); 70.1k LUTs (34%), 188 BRAM |
 | `rocket64nax` | NaxRiscv out-of-order, 2 decode / 2 ALU, RV64GC, 128 KiB L2 | Bitstream OK: 46.4k LUTs (23%), 79.5 BRAM; Linux: see below |
 
+Build provenance: the results for `rocket64cva6hp2`, `rocket64noelvhp2s`,
+`rocket64shuttlehp`, `rocket64shuttlehp2`, `rocket64vexiihp2`,
+`rocket64nax`, `rocket64x1` and `rocket64x1v4` come from bitstreams built
+from the current sources and pins. The other rows were measured on
+bitstreams built before the last source changes, which only added features
+for the newer configs (CVA6 `time` CSR option, multi-hart NOEL-V device
+tree, shared SpinalHDL wrapper, Shuttle 2379b9b, BOOM b4283f3). Those builds
+were removed to save disk; rebuild them before re-measuring.
+
 ### Root causes fixed on 2026-10-24
 
 1. **CVA6 Linux hang at the first timer tick**: Vivado 2024.1 synthesizes

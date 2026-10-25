@@ -220,7 +220,8 @@ per-core `-flto` builds using the core's full ISA and `-mtune` models.
 Running two copies under Linux, `rocket64noelvhp2s` reaches 7.05
 CoreMark/MHz in total (1.89x one copy) and `rocket64vexiihp2` 7.61 (2.01x).
 BOOM v4 Medium and NaxRiscv do not boot Linux (upstream core issues);
-details and per-flag results are in [docs/hardware-status.md](docs/hardware-status.md).
+details, per-flag results and which rows were measured on builds from
+earlier source revisions are in [docs/hardware-status.md](docs/hardware-status.md).
 
 ## Prepare the SD card
 Use USB SD card reader to connect SD card to the workstation, and run:
