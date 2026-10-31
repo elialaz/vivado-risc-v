@@ -175,6 +175,97 @@ static void usleep(unsigned us) {
     }
 }
 
+/*
+ * Fallback image loader over the board UART (AXI UART Lite at 0x6001_0000,
+ * the same device kprintf writes to).  This exists for designs that expose
+ * no RISC-V debug module (the NOEL-V SoC only has GRLIB AHBJTAG, i.e.
+ * GRMON) and for hosts without an SD card reader: bootrom still tries the
+ * SD card first; when that fails it waits for an image over the serial
+ * console.
+ *
+ * Wire format, all fields big-endian, no flow control (the sender must
+ * pace itself; the receive loop drains a 115200-Bd stream comfortably):
+ *   magic  "IMG2"
+ *   u32    payload length in bytes
+ *   u64    load address  (must be inside the DDR window)
+ *   u64    entry address (jumped to after the payload lands)
+ *   payload bytes
+ */
+#define UART_REG_BASE   0x60010000u
+#define UART_RX_VALID   0x1u
+
+static volatile uint32_t * const uart0 __attribute__((section(".rodata"))) =
+    (volatile uint32_t *)UART_REG_BASE;
+
+static int uart_rx_ready(void) {
+    return (uart0[2] & UART_RX_VALID) != 0;
+}
+
+static int uart_getc(void) {
+    while (!uart_rx_ready()) { }
+    return (int)(uart0[0] & 0xffu);
+}
+
+static uint64_t uart_read_be(unsigned n) {
+    uint64_t v = 0;
+    while (n--) v = (v << 8) | (uint64_t)uart_getc();
+    return v;
+}
+
+static void uart_drain(void) {
+    while (uart_rx_ready()) (void)uart0[0];
+}
+
+static int uart_download(void) {
+    static const char magic[4] = { 'I', 'M', 'G', '2' };
+    uintptr_t waited;
+    uint32_t len;
+    uint64_t addr, entry;
+    volatile uint8_t * dst;
+
+    kputs("Send image over UART (magic IMG2) ...");
+    /* 150 x 100 ms window for the first byte; headless boards keep booting. */
+    for (waited = 0; waited < 150 && !uart_rx_ready(); waited++)
+        usleep(100000);
+    if (!uart_rx_ready()) {
+        kputs("no UART image");
+        return -1;
+    }
+    for (unsigned i = 0; i < 4; i++) {
+        if (uart_getc() != magic[i]) {
+            kputs("UART image: bad magic");
+            uart_drain();
+            return -1;
+        }
+    }
+    len   = (uint32_t)uart_read_be(4);
+    addr  = uart_read_be(8);
+    entry = uart_read_be(8);
+    if (len == 0 || len > (64u << 20)) {
+        kputs("UART image: bad length");
+        uart_drain();
+        return -1;
+    }
+    if (addr < 0x80000000u || (addr + len) > 0xb0000000u) {
+        kputs("UART image: bad address");
+        uart_drain();
+        return -1;
+    }
+
+    dst = (volatile uint8_t *)(uintptr_t)addr;
+    for (uint32_t i = 0; i < len; i++) {
+        /* no console output here: printing could overflow the RX FIFO */
+        dst[i] = (uint8_t)uart_getc();
+    }
+    asm volatile ("fence rw, rw" ::: "memory");
+    kprintf("UART image: %lu bytes at 0x%lx, entry 0x%lx\n",
+            (unsigned long)len, (unsigned long)addr, (unsigned long)entry);
+    asm volatile ("fence.i" ::: "memory");
+    asm volatile ("jr %0" :: "r" (entry));
+    return 0; /* not reached */
+}
+
+
 static int sdc_cmd_finish(unsigned cmd) {
     unsigned status;
     while ((status = regs->cmd_int_status) == 0) {}
@@ -602,6 +693,7 @@ int main(void) {
             kprintf("Cannot read BOOT.ELF: %s\n", errno_to_str());
         }
         if (fd.obj.fs) f_close(&fd);
+        uart_download(); /* jump on IMG2 image; otherwise take the bus over */
         usleep(1000000);
     }
     return 0;
